@@ -37,6 +37,8 @@
 #endif
 
 
+uint32_t gInstructionsPerFrame = 0;
+
 static void InterpretOpcode(struct r4300_core* r4300);
 
 #define DECLARE_R4300
@@ -162,16 +164,9 @@ static void InterpretOpcode(struct r4300_core* r4300);
 
 #include "mips_instructions.def"
 
-void InterpretOpcode(struct r4300_core* r4300)
+void InterpretSPECIALOpcode(struct r4300_core* r4300, uint32_t op)
 {
-	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
-	if (op_address == NULL)
-		return;
-	uint32_t op = *op_address;
-
-	switch ((op >> 26) & 0x3F) {
-	case 0: /* SPECIAL prefix */
-		switch (op & 0x3F) {
+	switch (op & 0x3F) {
 		case 0: /* SPECIAL opcode 0: SLL */
 			if (RD_OF(op) != 0) SLL(r4300, op);
 			else                NOP(r4300, 0);
@@ -199,8 +194,8 @@ void InterpretOpcode(struct r4300_core* r4300)
 		case 8: JR(r4300, op); break;
 		case 9: /* SPECIAL opcode 9: JALR */
 			/* Note: This can omit the check for Rd == 0 because the JALR
-			 * function checks for link_register != &r4300_regs(4300)[0]. If you're
-			 * using this as a reference for a JIT, do check Rd == 0 in it. */
+				* function checks for link_register != &r4300_regs(4300)[0]. If you're
+				* using this as a reference for a JIT, do check Rd == 0 in it. */
 			JALR(r4300, op);
 			break;
 		case 12: SYSCALL(r4300, op); break;
@@ -325,13 +320,14 @@ void InterpretOpcode(struct r4300_core* r4300)
 			else                NOP(r4300, 0);
 			break;
 		default: /* SPECIAL opcodes 1, 5, 10, 11, 14, 21, 40, 41, 53, 55, 57,
-		            61: Reserved Instructions */
+					61: Reserved Instructions */
 			RESERVED(r4300, op);
 			break;
-		} /* switch (op & 0x3F) for the SPECIAL prefix */
-		break;
-	case 1: /* REGIMM prefix */
-		switch ((op >> 16) & 0x1F) {
+	} /* switch (op & 0x3F) for the SPECIAL prefix */
+}
+
+void InterpretREGIMMOpcode(struct r4300_core* r4300, uint32_t op) {
+	switch ((op >> 16) & 0x1F) {
 		case 0: /* REGIMM opcode 0: BLTZ */
 			if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BLTZ_IDLE(r4300, op);
 			else                                             BLTZ(r4300, op);
@@ -374,66 +370,11 @@ void InterpretOpcode(struct r4300_core* r4300)
 		            Reserved Instructions */
 			RESERVED(r4300, op);
 			break;
-		} /* switch ((op >> 16) & 0x1F) for the REGIMM prefix */
-		break;
-	case 2: /* Major opcode 2: J */
-		if (IS_ABSOLUTE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) J_IDLE(r4300, op);
-		else                                             J(r4300, op);
-		break;
-	case 3: /* Major opcode 3: JAL */
-		if (IS_ABSOLUTE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) JAL_IDLE(r4300, op);
-		else                                             JAL(r4300, op);
-		break;
-	case 4: /* Major opcode 4: BEQ */
-		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BEQ_IDLE(r4300, op);
-		else                                             BEQ(r4300, op);
-		break;
-	case 5: /* Major opcode 5: BNE */
-		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BNE_IDLE(r4300, op);
-		else                                             BNE(r4300, op);
-		break;
-	case 6: /* Major opcode 6: BLEZ */
-		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BLEZ_IDLE(r4300, op);
-		else                                             BLEZ(r4300, op);
-		break;
-	case 7: /* Major opcode 7: BGTZ */
-		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BGTZ_IDLE(r4300, op);
-		else                                             BGTZ(r4300, op);
-		break;
-	case 8: /* Major opcode 8: ADDI */
-		if (RT_OF(op) != 0) ADDI(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 9: /* Major opcode 9: ADDIU */
-		if (RT_OF(op) != 0) ADDIU(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 10: /* Major opcode 10: SLTI */
-		if (RT_OF(op) != 0) SLTI(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 11: /* Major opcode 11: SLTIU */
-		if (RT_OF(op) != 0) SLTIU(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 12: /* Major opcode 12: ANDI */
-		if (RT_OF(op) != 0) ANDI(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 13: /* Major opcode 13: ORI */
-		if (RT_OF(op) != 0) ORI(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 14: /* Major opcode 14: XORI */
-		if (RT_OF(op) != 0) XORI(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 15: /* Major opcode 15: LUI */
-		if (RT_OF(op) != 0) LUI(r4300, op);
-		else                NOP(r4300, 0);
-		break;
-	case 16: /* Coprocessor 0 prefix */
-		switch ((op >> 21) & 0x1F) {
+	} /* switch ((op >> 16) & 0x1F) for the REGIMM prefix */
+}
+
+void InterpretCOP0Opcode(struct r4300_core* r4300, uint32_t op) {
+	switch ((op >> 21) & 0x1F) {
 		case 0: /* Coprocessor 0 opcode 0: MFC0  */
 			if (RT_OF(op) != 0) MFC0(r4300, op);
 			else                NOP(r4300, 0);
@@ -454,19 +395,20 @@ void InterpretOpcode(struct r4300_core* r4300)
 			case 8: TLBP(r4300, op); break;
 			case 24: ERET(r4300, op); break;
 			default: /* TLB sub-opcodes 0, 3..5, 7, 9..23, 25..63:
-			            Reserved Instructions */
+						Reserved Instructions */
 				RESERVED(r4300, op);
 				break;
 			} /* switch (op & 0x3F) for Coprocessor 0 TLB opcodes */
 			break;
 		default: /* Coprocessor 0 opcodes 2..3, 5..15, 17..31:
-		            Reserved Instructions */
+					Reserved Instructions */
 			RESERVED(r4300, op);
 			break;
-		} /* switch ((op >> 21) & 0x1F) for the Coprocessor 0 prefix */
-		break;
-	case 17: /* Coprocessor 1 prefix */
-		switch ((op >> 21) & 0x1F) {
+	} /* switch ((op >> 21) & 0x1F) for the Coprocessor 0 prefix */
+}
+
+void InterpretCOP1Opcode(struct r4300_core* r4300, uint32_t op) {
+	switch ((op >> 21) & 0x1F) {
 		case 0: /* Coprocessor 1 opcode 0: MFC1 */
 			if (RT_OF(op) != 0) MFC1(r4300, op);
 			else                NOP(r4300, 0);
@@ -617,10 +559,11 @@ void InterpretOpcode(struct r4300_core* r4300)
 		            Reserved Instructions */
 			RESERVED(r4300, op);
 			break;
-		} /* switch ((op >> 21) & 0x1F) for the Coprocessor 1 prefix */
-		break;
-	case 18: /* Coprocessor 2 prefix */
-		switch ((op >> 21) & 0x1F) {
+	} /* switch ((op >> 21) & 0x1F) for the Coprocessor 1 prefix */
+}
+
+void InterpretCOP2Opcode(struct r4300_core* r4300, uint32_t op) {
+	switch ((op >> 21) & 0x1F) {
 		case 0: /* Coprocessor 2 opcode 0: MFC2 */
 			if (RT_OF(op) != 0) MFC2(r4300, op);
 			else                NOP(r4300, 0);
@@ -639,7 +582,87 @@ void InterpretOpcode(struct r4300_core* r4300)
 		default:
 			RESERVED_COP2(r4300, op);
 			break;
-		}
+	}
+}
+
+void InterpretOpcode(struct r4300_core* r4300)
+{
+	uint32_t* op_address = fast_mem_access(r4300, *r4300_pc(r4300));
+	if (op_address == NULL)
+		return;
+	uint32_t op = *op_address;
+
+	switch ((op >> 26) & 0x3F) {
+	case 0: /* SPECIAL prefix */
+		InterpretSPECIALOpcode(r4300, op);
+		break;
+	case 1: /* REGIMM prefix */
+		InterpretREGIMMOpcode(r4300, op);
+		break;
+	case 2: /* Major opcode 2: J */
+		if (IS_ABSOLUTE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) J_IDLE(r4300, op);
+		else                                             J(r4300, op);
+		break;
+	case 3: /* Major opcode 3: JAL */
+		if (IS_ABSOLUTE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) JAL_IDLE(r4300, op);
+		else                                             JAL(r4300, op);
+		break;
+	case 4: /* Major opcode 4: BEQ */
+		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BEQ_IDLE(r4300, op);
+		else                                             BEQ(r4300, op);
+		break;
+	case 5: /* Major opcode 5: BNE */
+		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BNE_IDLE(r4300, op);
+		else                                             BNE(r4300, op);
+		break;
+	case 6: /* Major opcode 6: BLEZ */
+		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BLEZ_IDLE(r4300, op);
+		else                                             BLEZ(r4300, op);
+		break;
+	case 7: /* Major opcode 7: BGTZ */
+		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BGTZ_IDLE(r4300, op);
+		else                                             BGTZ(r4300, op);
+		break;
+	case 8: /* Major opcode 8: ADDI */
+		if (RT_OF(op) != 0) ADDI(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 9: /* Major opcode 9: ADDIU */
+		if (RT_OF(op) != 0) ADDIU(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 10: /* Major opcode 10: SLTI */
+		if (RT_OF(op) != 0) SLTI(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 11: /* Major opcode 11: SLTIU */
+		if (RT_OF(op) != 0) SLTIU(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 12: /* Major opcode 12: ANDI */
+		if (RT_OF(op) != 0) ANDI(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 13: /* Major opcode 13: ORI */
+		if (RT_OF(op) != 0) ORI(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 14: /* Major opcode 14: XORI */
+		if (RT_OF(op) != 0) XORI(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 15: /* Major opcode 15: LUI */
+		if (RT_OF(op) != 0) LUI(r4300, op);
+		else                NOP(r4300, 0);
+		break;
+	case 16: /* Coprocessor 0 prefix */
+		InterpretCOP0Opcode(r4300, op);
+		break;
+	case 17: /* Coprocessor 1 prefix */
+		InterpretCOP1Opcode(r4300, op);
+		break;
+	case 18: /* Coprocessor 2 prefix */
+		InterpretCOP2Opcode(r4300, op);
 		break;
 	case 20: /* Major opcode 20: BEQL */
 		if (IS_RELATIVE_IDLE_LOOP(r4300, op, *r4300_pc(r4300))) BEQL_IDLE(r4300, op);
@@ -758,6 +781,7 @@ void run_pure_interpreter(struct r4300_core* r4300)
      if (g_DebuggerActive) update_debugger(*r4300_pc(r4300));
 #endif
      InterpretOpcode(r4300);
+	 gInstructionsPerFrame++;
 	 r4300_ml64_do_code_callbacks(r4300);
    }
 }

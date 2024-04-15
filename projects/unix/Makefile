@@ -616,7 +616,6 @@ CFLAGS += -I$(SUBDIR)/md5
 # xxhash
 CFLAGS += -I$(SUBDIR)/xxhash
 
-
 ifeq ("$(OS)","MINGW")
 SOURCE += \
     $(SRCDIR)/osal/dynamiclib_win32.c \

@@ -249,7 +249,7 @@ unsigned int* r4300_llbit(struct r4300_core* r4300)
     return &r4300->llbit;
 }
 
-uint32_t* r4300_pc(struct r4300_core* r4300)
+inline uint32_t* r4300_pc(struct r4300_core* r4300)
 {
 #ifdef NEW_DYNAREC
     return (r4300->emumode == EMUMODE_DYNAREC)

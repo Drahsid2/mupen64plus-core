@@ -89,9 +89,6 @@
 #include "lirc.h"
 #endif //WITH_LIRC
 
-#include <cimgui.h>
-#include <cimgui_backend.h>
-
 /* version number for Core config section */
 #define CONFIG_PARAM_VERSION 1.01
 
@@ -143,7 +140,6 @@ static size_t l_pak_type_idx[6];
 /* PRNG state - used for Mempaks ID generation */
 static struct xoshiro256pp_state l_mpk_idgen;
 
-bool g_imgui_show_demo_window = 1;
 SDL_Window* g_backup_current_window = NULL;
 SDL_GLContext g_backup_current_context = NULL;
 
@@ -923,6 +919,7 @@ m64p_error main_reset(int do_hard_reset)
 /*********************************************************************************************************
 * global functions, callbacks from the r4300 core or from other plugins
 */
+extern uint32_t gInstructionsPerFrame;
 static void video_plugin_render_callback(int bScreenRedrawn)
 {
 #ifdef M64P_OSD
@@ -957,27 +954,12 @@ static void video_plugin_render_callback(int bScreenRedrawn)
         input.renderCallback();
     }
 
-    ImGuiBackend_ImplOpenGL3_NewFrame();
-    ImGuiBackend_ImplSDL2_NewFrame();
-    ImGui_NewFrame();
-
-    if (g_imgui_show_demo_window) {
-        ImGui_ShowDemoWindow(&g_imgui_show_demo_window);
-    }
-
-    if (gVICallback) {
-        gVICallback();
-    }
-
-    ImGuiIO* io = ImGui_GetIO();
-    ImGui_Render();
-    ImGuiBackend_ImplOpenGL3_RenderDrawData(ImGui_GetDrawData());
+    gInstructionsPerFrame = 0;
 
     g_backup_current_window = SDL_GL_GetCurrentWindow();
     g_backup_current_context = SDL_GL_GetCurrentContext();
-    if (io->ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui_UpdatePlatformWindows();
-        ImGui_RenderPlatformWindowsDefault();
+    if (gVICallback) {
+        gVICallback();
     }
     SDL_GL_MakeCurrent(g_backup_current_window, g_backup_current_context);
 }
@@ -1657,10 +1639,6 @@ m64p_error main_run(void)
             break;
     }
 
-    // imgui init
-    ImGuiContext* imgui_context = ImGui_CreateContext(NULL);
-    ImGui_SetCurrentContext(imgui_context);
-
     /* Seed MPK ID gen using current time */
     uint64_t mpk_seed = !netplay_is_init() ? (uint64_t)time(NULL) : 0;
     l_mpk_idgen = xoshiro256pp_seed(mpk_seed);
@@ -2025,8 +2003,6 @@ m64p_error main_run(void)
     /* Startup message on the OSD */
     osd_new_message(OSD_MIDDLE_CENTER, "Mupen64Plus Started...");
 
-    // imgui init 2
-    ImGuiIO* io = ImGui_GetIO();
     SDL_Window* window = SDL_GL_GetCurrentWindow();
     SDL_GLContext gl_context = SDL_GL_GetCurrentContext();
 
@@ -2043,15 +2019,6 @@ m64p_error main_run(void)
     else {
         DebugMessage(M64MSG_STATUS, "gl_context OK!");
     }
-
-    io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-    io->ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
-    io->ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-    io->ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-
-    ImGui_StyleColorsDark(NULL);
-    ImGuiBackend_ImplSDL2_InitForOpenGL(window, gl_context);
-    ImGuiBackend_ImplOpenGL3_Init("#version 330");
 
     g_EmulatorRunning = 1;
     StateChanged(M64CORE_EMU_STATE, M64EMU_RUNNING);
@@ -2095,11 +2062,6 @@ m64p_error main_run(void)
     input.romClosed();
     audio.romClosed();
     gfx.romClosed();
-
-    // imgui deinit
-    ImGuiBackend_ImplOpenGL3_Shutdown();
-    ImGuiBackend_ImplSDL2_Shutdown();
-    ImGui_DestroyContext(imgui_context);
 
     // clean up
     g_EmulatorRunning = 0;

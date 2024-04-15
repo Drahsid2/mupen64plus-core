@@ -1,5 +1,9 @@
 {
     "files.associations": {
-        "modloader_common.h": "c"
+        "modloader_common.h": "c",
+        "memory_base.h": "c",
+        "preproc.h": "c",
+        "m64p_types.h": "c",
+        "*.def": "c"
     }
 }

@@ -26,8 +26,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <cimgui_backend.h>
-
 #if ! SDL_VERSION_ATLEAST(1,3,0)
 
 #define SDL_SCANCODE_ESCAPE SDLK_ESCAPE
@@ -316,8 +314,6 @@ static int SDLCALL event_sdl_filter(void *userdata, SDL_Event *event)
 #ifndef NO_KEYBINDINGS
     int cmd, action;
 #endif /* NO_KEYBINDINGS */
-
-    ImGuiBackend_ImplSDL2_ProcessEvent(event);
 
     if (event->type == SDL_WINDOWEVENT && event->window.event == SDL_WINDOWEVENT_CLOSE && event->window.windowID == SDL_GetWindowID(g_backup_current_window)) {
         quit = 1;
